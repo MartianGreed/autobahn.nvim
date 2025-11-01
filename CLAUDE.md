@@ -63,15 +63,15 @@ No test suite or build commands currently exist.
 ## UI System
 
 **Snacks Integration** (`lua/autobahn/ui/snacks.lua`):
-- Two-pane layout: main window (session list) + preview window (output)
-- Main window created via `snacks.win({ style = "autobahn_history" })`
-- Preview window created via `nvim_open_win` positioned adjacent to main window
-- Style config in `config.snacks.styles.autobahn_history`
-- Registered during integrations setup in `integrations/init.lua`
+- Two-pane layout using `snacks.layout()` with horizontal box model
+- Left pane: session list (45% width), Right pane: live preview (55% width)
+- Layout config defines two windows: "list" and "preview"
+- When preview disabled (`p` key): single-pane vertical layout (70% width)
 - Each session rendered as single line with extmarks for metadata (cost, duration, ID)
 - Visual selection indicator: `▶` prefix on current line
 - Preview updates on cursor movement: shows buffer_id content or output array
 - Toggle preview pane with `p` key (stores state in `config.ui_show_preview`)
+- Access windows via `layout:windows()` for list_win and preview_win
 - Keymaps: j/k navigation, Enter view, d delete, m message, n new, p toggle preview, q close
 
 **Legacy UI** (`lua/autobahn/ui/popup.lua`, `dashboard.lua`):
@@ -109,13 +109,14 @@ agents = {
 ## Critical Implementation Details
 
 **Two-Pane Layout** (`lua/autobahn/ui/snacks.lua`):
-- Main window width: 0.9 (90% of editor) when preview enabled, 0.7 when disabled
-- List pane: 40% of main window width
-- Preview pane: remaining width (minus 1 for border)
-- Preview positioned at `col = main_col + list_width + 1`
-- Both windows closed via `close_all()` function
-- BufLeave autocmd cleans up preview window
+- Uses `snacks.layout()` with horizontal box configuration
+- Layout width: 0.9 (90%) when preview enabled, 0.7 when disabled
+- List pane: 45% width with cursorline enabled
+- Preview pane: 55% width with wrap enabled
+- Both windows managed by layout, closed via `layout:close()`
 - Preview renders from `session.buffer_id` (if valid) or `session.output` array
+- Layout automatically handles window positioning and sizing
+- Access individual windows via `layout:windows().list` and `layout:windows().preview`
 
 **Interactive Session Resume Flow**:
 1. First spawn: `claude -p "task" --output-format stream-json --verbose`

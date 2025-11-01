@@ -43,8 +43,8 @@ local function render_session_item(buf, line_num, session_data, is_selected)
   local mode_icon = s.interactive and "󰊢" or "󱕘"
   local task_text = s.task or "No task description"
 
-  if #task_text > 60 then
-    task_text = task_text:sub(1, 57) .. "..."
+  if #task_text > 45 then
+    task_text = task_text:sub(1, 42) .. "..."
   end
 
   local cost_text = string.format("$%.3f", s.cost_usd or 0)
@@ -117,6 +117,9 @@ local function render_preview(preview_buf, session_data)
       string.format("  Session: %s", s.id),
       string.format("  Status: %s", s.status),
       string.format("  Task: %s", s.task or "N/A"),
+      string.format("  Branch: %s", s.branch or "N/A"),
+      string.format("  Cost: $%.3f", s.cost_usd or 0),
+      string.format("  Created: %s", format_duration(s.created_at)),
       "",
       "  No output yet...",
       "",
@@ -150,15 +153,51 @@ function M.show_history(opts)
   local config_opts = require("autobahn.config").get()
   local show_preview = config_opts.ui_show_preview ~= false
 
-  local width = show_preview and 0.9 or 0.7
-  local list_width_ratio = show_preview and 0.4 or 1.0
+  local wins = {
+    list = snacks.win({
+      buf = list_buf,
+      title = " Autobahn Sessions ",
+      title_pos = "center",
+      border = "rounded",
+      show = false,
+      wo = {
+        cursorline = true,
+      },
+    }),
+  }
 
-  local main_win = snacks.win({
-    style = "autobahn_history",
-    enter = true,
-    show = false,
-    buf = list_buf,
-    width = width,
+  local layout_box
+
+  if show_preview then
+    wins.preview = snacks.win({
+      buf = preview_buf,
+      title = " Session Output ",
+      title_pos = "center",
+      border = "rounded",
+      show = false,
+      wo = {
+        wrap = true,
+      },
+    })
+
+    layout_box = {
+      box = "horizontal",
+      { win = "list", width = 0.45 },
+      { win = "preview" },
+    }
+  else
+    layout_box = {
+      box = "vertical",
+      { win = "list" },
+    }
+  end
+
+  local layout = snacks.layout.new({
+    backdrop = false,
+    width = show_preview and 0.9 or 0.7,
+    height = 0.8,
+    wins = wins,
+    layout = layout_box,
   })
 
   if #session_list == 0 then
@@ -181,39 +220,7 @@ function M.show_history(opts)
 
   vim.api.nvim_buf_set_option(list_buf, "modifiable", false)
 
-  main_win:show()
-  if #session_list > 0 then
-    vim.api.nvim_win_set_cursor(main_win.win, { 1, 0 })
-  end
-
-  local preview_win = nil
   if show_preview then
-    local main_win_config = vim.api.nvim_win_get_config(main_win.win)
-    local main_width = main_win_config.width
-    local main_height = main_win_config.height
-    local main_row = type(main_win_config.row) == "table" and main_win_config.row[false] or main_win_config.row
-    local main_col = type(main_win_config.col) == "table" and main_win_config.col[false] or main_win_config.col
-
-    local list_win_width = math.floor(main_width * list_width_ratio)
-    vim.api.nvim_win_set_width(main_win.win, list_win_width)
-
-    local preview_width = main_width - list_win_width - 1
-
-    preview_win = vim.api.nvim_open_win(preview_buf, false, {
-      relative = "editor",
-      width = preview_width,
-      height = main_height,
-      row = main_row,
-      col = main_col + list_win_width + 1,
-      style = "minimal",
-      border = "rounded",
-      title = " Session Output ",
-      title_pos = "center",
-    })
-
-    vim.api.nvim_win_set_option(preview_win, "wrap", true)
-    vim.api.nvim_win_set_option(preview_win, "cursorline", false)
-
     if #session_list > 0 then
       render_preview(preview_buf, session_list[1])
     else
@@ -227,7 +234,12 @@ function M.show_history(opts)
     if #session_list == 0 then
       return nil, nil, nil
     end
-    local line = vim.api.nvim_win_get_cursor(main_win.win)[1]
+    local wins = layout:windows()
+    local list_win = wins.list
+    if not list_win or not vim.api.nvim_win_is_valid(list_win.win) then
+      return nil, nil, nil
+    end
+    local line = vim.api.nvim_win_get_cursor(list_win.win)[1]
     if line > 0 and line <= #session_list then
       return session_list[line].id, session_list[line].session, session_list[line]
     end
@@ -238,7 +250,13 @@ function M.show_history(opts)
     if #session_list == 0 then
       return
     end
-    local new_line = vim.api.nvim_win_get_cursor(main_win.win)[1] - 1
+    local wins = layout:windows()
+    local list_win = wins.list
+    if not list_win or not vim.api.nvim_win_is_valid(list_win.win) then
+      return
+    end
+
+    local new_line = vim.api.nvim_win_get_cursor(list_win.win)[1] - 1
     if new_line ~= current_line then
       vim.api.nvim_buf_set_option(list_buf, "modifiable", true)
 
@@ -249,7 +267,7 @@ function M.show_history(opts)
       if new_line >= 0 and new_line < #session_list then
         render_session_item(list_buf, new_line, session_list[new_line + 1], true)
 
-        if preview_win and vim.api.nvim_win_is_valid(preview_win) then
+        if show_preview then
           render_preview(preview_buf, session_list[new_line + 1])
         end
       end
@@ -260,12 +278,7 @@ function M.show_history(opts)
   end
 
   local function close_all()
-    if main_win then
-      main_win:close()
-    end
-    if preview_win and vim.api.nvim_win_is_valid(preview_win) then
-      vim.api.nvim_win_close(preview_win, true)
-    end
+    layout:close()
   end
 
   vim.keymap.set("n", "<CR>", function()
@@ -333,15 +346,15 @@ function M.show_history(opts)
     callback = update_selection,
   })
 
-  vim.api.nvim_create_autocmd("BufLeave", {
-    buffer = list_buf,
-    once = true,
-    callback = function()
-      if preview_win and vim.api.nvim_win_is_valid(preview_win) then
-        vim.api.nvim_win_close(preview_win, true)
-      end
-    end,
-  })
+  layout:show()
+
+  if #session_list > 0 then
+    local wins = layout:windows()
+    local list_win = wins.list
+    if list_win and vim.api.nvim_win_is_valid(list_win.win) then
+      vim.api.nvim_win_set_cursor(list_win.win, { 1, 0 })
+    end
+  end
 end
 
 function M.show_all()
