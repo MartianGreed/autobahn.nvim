@@ -2,6 +2,7 @@ return {
   "your-name/autobahn.nvim",
   dependencies = {
     "nvim-lua/plenary.nvim",
+    "folke/snacks.nvim",
     "MunifTanjim/nui.nvim",
     "nvim-telescope/telescope.nvim",
     "ThePrimeagen/git-worktree.nvim",
@@ -24,6 +25,7 @@ return {
         ["claude-code"] = {
           cmd = "claude",
           auto_accept = false,
+          auto_accept_flag = "--dangerously-skip-permissions",
           max_cost_usd = 1.0,
           output_format = "stream-json",
         },
@@ -31,12 +33,14 @@ return {
         ["aider"] = {
           cmd = "aider",
           auto_accept = true,
+          auto_accept_flag = "--yes",
           max_cost_usd = 0.5,
         },
 
         ["custom-script"] = {
           cmd = vim.fn.expand("~/.local/bin/my-coding-agent"),
           auto_accept = false,
+          auto_accept_flag = { "--auto", "--no-confirm" },
           max_cost_usd = 2.0,
         },
       },
@@ -45,43 +49,30 @@ return {
     local events = require("autobahn.events")
 
     events.on(events.EventType.SESSION_COMPLETED, function(data)
-      vim.notify(
-        string.format("Session %s completed!", data.id),
-        vim.log.levels.INFO
-      )
+      local autobahn = require("autobahn")
+      autobahn.view_session(data.id)
     end)
 
     events.on(events.EventType.SESSION_ERROR, function(data)
-      vim.notify(
-        string.format("Session %s failed with code %d", data.id, data.exit_code),
-        vim.log.levels.ERROR
-      )
+      local autobahn = require("autobahn")
+      autobahn.view_session(data.id)
     end)
   end,
 
   keys = {
+    { "<leader>a", "<cmd>Autobahn<cr>", desc = "Autobahn Sessions" },
     { "<leader>ad", "<cmd>AutobahnDashboard<cr>", desc = "Autobahn Dashboard" },
-    { "<leader>an", "<cmd>AutobahnNew<cr>", desc = "New Autobahn Session" },
-    { "<leader>ar", "<cmd>AutobahnRestore<cr>", desc = "Restore Sessions" },
-    { "<leader>ac", "<cmd>AutobahnClear<cr>", desc = "Clear Sessions" },
+    { "<leader>al", "<cmd>Autobahn last<cr>", desc = "Last Session" },
+    { "<leader>ar", "<cmd>Autobahn running<cr>", desc = "Running Sessions" },
+    { "<leader>ae", "<cmd>Autobahn errors<cr>", desc = "Error Sessions" },
+    { "<leader>an", "<cmd>AutobahnNew<cr>", desc = "New Session" },
 
     {
       "<leader>as",
       function()
         require("telescope").extensions.autobahn.sessions()
       end,
-      desc = "Search Sessions",
-    },
-
-    {
-      "<leader>aq",
-      function()
-        local session_id = vim.fn.input("Session ID: ")
-        if session_id ~= "" then
-          require("autobahn").view_session(session_id)
-        end
-      end,
-      desc = "Quick View Session",
+      desc = "Search Sessions (Telescope)",
     },
   },
 }

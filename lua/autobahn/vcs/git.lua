@@ -1,21 +1,21 @@
 local M = {}
 
 function M.is_available()
-  local result = vim.fn.system("git --version")
+  local result = vim.fn.system({ "git", "--version" })
   return vim.v.shell_error == 0
 end
 
 function M.is_repo(path)
   path = path or vim.fn.getcwd()
-  local result = vim.fn.system(string.format("cd '%s' && git rev-parse --git-dir 2>/dev/null", path))
+  local result = vim.fn.systemlist({ "git", "-C", path, "rev-parse", "--git-dir" })
   return vim.v.shell_error == 0
 end
 
 function M.get_root(path)
   path = path or vim.fn.getcwd()
-  local result = vim.fn.system(string.format("cd '%s' && git rev-parse --show-toplevel 2>/dev/null", path))
-  if vim.v.shell_error == 0 then
-    return vim.trim(result)
+  local result = vim.fn.systemlist({ "git", "-C", path, "rev-parse", "--show-toplevel" })
+  if vim.v.shell_error == 0 and #result > 0 then
+    return vim.trim(result[1])
   end
   return nil
 end
@@ -30,16 +30,30 @@ function M.create_workspace(opts)
   local branch_name = opts.branch or ("autobahn/" .. os.date("%Y%m%d-%H%M%S"))
   local workspace_path = root .. "/.autobahn/" .. branch_name
 
-  local cmd = string.format(
-    "git worktree add '%s' -b '%s' 2>&1",
-    workspace_path,
-    branch_name
-  )
+  if vim.fn.isdirectory(workspace_path) == 1 then
+    local existing = vim.fn.system({ "git", "worktree", "list", "--porcelain" })
+    if existing:match(vim.pesc(workspace_path)) then
+      return workspace_path
+    end
+  end
 
-  local result = vim.fn.system(cmd)
+  vim.fn.mkdir(vim.fn.fnamemodify(workspace_path, ":h"), "p")
+
+  local result = vim.fn.system({
+    "git",
+    "worktree",
+    "add",
+    workspace_path,
+    "-b",
+    branch_name,
+  })
+
   if vim.v.shell_error ~= 0 then
+    if result:match("already exists") then
+      return workspace_path
+    end
     vim.notify(
-      string.format("Failed to create git worktree: %s", result),
+      string.format("Failed to create git worktree: %s", vim.trim(result)),
       vim.log.levels.ERROR
     )
     return nil
@@ -53,12 +67,11 @@ function M.remove_workspace(workspace_path)
     return false
   end
 
-  local cmd = string.format("git worktree remove '%s' --force 2>&1", workspace_path)
-  local result = vim.fn.system(cmd)
+  local result = vim.fn.system({ "git", "worktree", "remove", workspace_path, "--force" })
 
   if vim.v.shell_error ~= 0 then
     vim.notify(
-      string.format("Failed to remove git worktree: %s", result),
+      string.format("Failed to remove git worktree: %s", vim.trim(result)),
       vim.log.levels.WARN
     )
     return false
@@ -68,8 +81,7 @@ function M.remove_workspace(workspace_path)
 end
 
 function M.list_workspaces()
-  local cmd = "git worktree list --porcelain"
-  local result = vim.fn.system(cmd)
+  local result = vim.fn.system({ "git", "worktree", "list", "--porcelain" })
 
   if vim.v.shell_error ~= 0 then
     return {}
@@ -97,16 +109,22 @@ function M.list_workspaces()
 end
 
 function M.get_branches()
-  local cmd = "git branch -a --format='%(refname:short)'"
-  local result = vim.fn.system(cmd)
+  local result = vim.fn.system({ "git", "branch", "-a", "--format=%(refname:short)" })
 
   if vim.v.shell_error ~= 0 then
+    vim.notify(
+      string.format("Git branch command failed: %s", vim.trim(result)),
+      vim.log.levels.DEBUG
+    )
     return {}
   end
 
   local branches = {}
   for branch in result:gmatch("[^\r\n]+") do
-    table.insert(branches, branch)
+    local trimmed = vim.trim(branch)
+    if trimmed ~= "" then
+      table.insert(branches, trimmed)
+    end
   end
 
   return branches

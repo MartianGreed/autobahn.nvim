@@ -1,3 +1,5 @@
+--- VCS abstraction layer
+--- @module autobahn.vcs
 local M = {}
 
 local backends = {
@@ -41,6 +43,10 @@ local function get_backend()
   return backend
 end
 
+--- Create a new workspace
+--- @param opts table Workspace options
+--- @field branch string|nil Branch name
+--- @return string|nil workspace_path Workspace path or nil on failure
 function M.create_workspace(opts)
   local backend = get_backend()
   if not backend then
@@ -50,6 +56,9 @@ function M.create_workspace(opts)
   return backend.create_workspace(opts)
 end
 
+--- Remove a workspace
+--- @param workspace_path string Workspace path
+--- @return boolean success True if workspace was removed
 function M.remove_workspace(workspace_path)
   local backend = get_backend()
   if not backend then
@@ -59,6 +68,8 @@ function M.remove_workspace(workspace_path)
   return backend.remove_workspace(workspace_path)
 end
 
+--- List all workspaces
+--- @return table workspaces List of workspace paths
 function M.list_workspaces()
   local backend = get_backend()
   if not backend then
@@ -68,6 +79,8 @@ function M.list_workspaces()
   return backend.list_workspaces()
 end
 
+--- Get all branches
+--- @return table branches List of branch names
 function M.get_branches()
   local backend = get_backend()
   if not backend then
@@ -77,6 +90,8 @@ function M.get_branches()
   return backend.get_branches()
 end
 
+--- Get repository root
+--- @return string|nil root Repository root path or nil
 function M.get_root()
   local backend = get_backend()
   if not backend then
@@ -86,6 +101,8 @@ function M.get_root()
   return backend.get_root()
 end
 
+--- Detect VCS type
+--- @return string|nil vcs_type "git", "jj", or nil
 function M.detect()
   return detect_vcs()
 end

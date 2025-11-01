@@ -72,6 +72,7 @@ local function render_dashboard()
   table.insert(lines, "│                                                  │")
   table.insert(lines, "├──────────────────────────────────────────────────┤")
   table.insert(lines, "│ <Enter> View | d Delete | n New | r Refresh     │")
+  table.insert(lines, "│ m Message    | q Quit                           │")
   table.insert(lines, "╰──────────────────────────────────────────────────╯")
 
   vim.api.nvim_buf_set_option(dashboard_split.bufnr, "modifiable", true)
@@ -129,6 +130,13 @@ local function setup_keymaps()
 
   vim.keymap.set("n", "r", function()
     render_dashboard()
+  end, { buffer = dashboard_split.bufnr, silent = true })
+
+  vim.keymap.set("n", "m", function()
+    local session_id = get_session_at_line()
+    if session_id then
+      require("autobahn").send_message_interactive(session_id)
+    end
   end, { buffer = dashboard_split.bufnr, silent = true })
 
   vim.keymap.set("n", "q", function()
