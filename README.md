@@ -76,12 +76,11 @@ Multi-agent coding session manager for Neovim. Run multiple coding agents in iso
 
 **Snacks UI** (default):
 - Modern interface powered by [snacks.nvim](https://github.com/folke/snacks.nvim)
-- Two-pane layout: session list on left, live output preview on right
-- Interactive session browser with visual selection
+- Built-in fuzzy filtering by task, branch, or ID
+- Live preview of session output as you navigate
 - Rich metadata display (cost, duration, session ID)
-- Real-time preview updates as you navigate sessions
 - Integrated picker for session creation (branch selection, mode, auto-accept)
-- Toggle preview with `p` key
+- Customizable actions: view, delete, send message, new session
 - Filter views: all, last, running, errors
 - Access with `:Autobahn` or `:AutobahnDashboard`
 
@@ -128,13 +127,13 @@ Multi-agent coding session manager for Neovim. Run multiple coding agents in iso
 
 The Snacks UI (`:Autobahn`/`:AutobahnDashboard`) supports:
 
-- `j`/`k` - Navigate sessions (updates preview in real-time)
+- Type to filter sessions by task, branch, or ID (fuzzy matching)
+- `j`/`k` or `<Up>`/`<Down>` - Navigate sessions (updates preview in real-time)
 - `<Enter>` - View session output in full window
 - `d` - Delete session and refresh
 - `m` - Send message to session (interactive sessions only)
 - `n` - New session
-- `p` - Toggle preview pane
-- `q` - Close
+- `<Esc>` or `q` - Close
 
 The split dashboard (`:AutobahnDashboardSplit`) supports:
 

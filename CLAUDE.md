@@ -63,16 +63,19 @@ No test suite or build commands currently exist.
 ## UI System
 
 **Snacks Integration** (`lua/autobahn/ui/snacks.lua`):
-- Two-pane layout using `snacks.layout()` with horizontal box model
+- Three-pane layout using `snacks.layout()` with nested box model
+- Input pane (top, 1 line height): fuzzy filter using prompt buffer
 - Left pane: session list (45% width), Right pane: live preview (55% width)
-- Layout config defines two windows: "list" and "preview"
-- When preview disabled (`p` key): single-pane vertical layout (70% width)
+- Layout structure: horizontal box containing (vertical box with input + list) + preview
+- When preview disabled (`p` key): vertical layout with input + list (70% width)
+- Fuzzy matching on task, branch, and ID with score-based ranking
 - Each session rendered as single line with extmarks for metadata (cost, duration, ID)
 - Visual selection indicator: `▶` prefix on current line
 - Preview updates on cursor movement: shows buffer_id content or output array
+- Input buffer uses `on_lines` callback to trigger live filtering via `refresh_list()`
 - Toggle preview pane with `p` key (stores state in `config.ui_show_preview`)
-- Access windows via `layout:windows()` for list_win and preview_win
-- Keymaps: j/k navigation, Enter view, d delete, m message, n new, p toggle preview, q close
+- Access windows via `layout:windows()` for input_win, list_win, and preview_win
+- Keymaps: i//, Ctrl-n/p for input, j/k navigation, Enter view, d delete, m message, n new, p toggle, q close
 
 **Legacy UI** (`lua/autobahn/ui/popup.lua`, `dashboard.lua`):
 - Uses nui.nvim Popup and Split components
