@@ -135,6 +135,8 @@ The Snacks UI (`:Autobahn`/`:AutobahnDashboard`) supports:
 - `n` - New session
 - `<Esc>` or `q` - Close
 
+Available commands are displayed in a footer at the bottom of the dashboard.
+
 The split dashboard (`:AutobahnDashboardSplit`) supports:
 
 - `<Enter>` - View session output

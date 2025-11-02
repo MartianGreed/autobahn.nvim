@@ -48,6 +48,10 @@ local function select_branch(callback)
         end
       end,
     })
+
+    vim.schedule(function()
+      vim.cmd("startinsert")
+    end)
   else
     vim.ui.select(branches, {
       prompt = "Select Branch:",
@@ -77,8 +81,8 @@ local function prompt_auto_accept(callback)
     local snacks = require("snacks")
     snacks.picker.pick({
       items = {
-        { idx = 1, text = "No  - Review each action", score = 0, value = false },
-        { idx = 2, text = "Yes - Auto-accept all actions", score = 0, value = true },
+        { idx = 1, text = "Yes - Auto-accept all actions", score = 0, value = true },
+        { idx = 2, text = "No  - Review each action", score = 0, value = false },
       },
       prompt = " Auto-accept agent actions? ",
       format = "text",
@@ -92,8 +96,12 @@ local function prompt_auto_accept(callback)
         end
       end,
     })
+
+    vim.schedule(function()
+      vim.cmd("startinsert")
+    end)
   else
-    vim.ui.select({ "No", "Yes" }, {
+    vim.ui.select({ "Yes", "No" }, {
       prompt = "Auto-accept agent actions?",
     }, function(choice)
       if choice then
@@ -108,8 +116,8 @@ local function prompt_interactive(callback)
     local snacks = require("snacks")
     snacks.picker.pick({
       items = {
-        { idx = 1, text = "󱕘 One-shot  - Execute task and exit", score = 0, value = false },
-        { idx = 2, text = "󰊢 Interactive - Continuous conversation", score = 0, value = true },
+        { idx = 1, text = "󰊢 Interactive - Continuous conversation", score = 0, value = true },
+        { idx = 2, text = "󱕘 One-shot  - Execute task and exit", score = 0, value = false },
       },
       prompt = " Session Mode ",
       format = "text",
@@ -123,8 +131,12 @@ local function prompt_interactive(callback)
         end
       end,
     })
+
+    vim.schedule(function()
+      vim.cmd("startinsert")
+    end)
   else
-    vim.ui.select({ "One-shot", "Interactive" }, {
+    vim.ui.select({ "Interactive", "One-shot" }, {
       prompt = "Session mode?",
     }, function(choice)
       if choice then
