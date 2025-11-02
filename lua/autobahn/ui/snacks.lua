@@ -107,6 +107,9 @@ function M.show_history(opts)
 		return
 	end
 
+	-- local config_opts = require("autobahn.config").get()
+	-- local show_preview = config_opts.ui_show_preview ~= false
+
 	local picker = snacks.picker.pick({
 		items = items,
 		prompt = " Autobahn Sessions ",
@@ -116,9 +119,48 @@ function M.show_history(opts)
 				{ " " .. item.detail, "Comment" },
 			}
 		end,
-		-- preview raw text.
+		-- Preview with live buffer support
 		preview = function(ctx)
-			ctx.preview:set_lines({ ctx.item.preview.text })
+			local item = ctx.item
+			if not item or not item.session then
+				ctx.preview:set_lines({ "No session" })
+				return
+			end
+
+			local s = item.session
+
+			-- If session has a live buffer, display it directly
+			if s.buffer_id and vim.api.nvim_buf_is_valid(s.buffer_id) then
+				-- Use the actual session buffer for real-time updates
+				ctx.preview:set_buf(s.buffer_id)
+				return
+			end
+
+			-- Fallback: create a temporary buffer with stored output
+			local lines = {}
+			if s.output and #s.output > 0 then
+				lines = s.output
+			else
+				lines = {
+					"",
+					string.format("Session: %s", s.id),
+					string.format("Status: %s", s.status),
+					string.format("Task: %s", s.task or "N/A"),
+					string.format("Branch: %s", s.branch or "N/A"),
+					string.format("Cost: $%.3f", s.cost_usd or 0),
+					string.format("Created: %s", format_duration(s.created_at)),
+					"",
+					"No output yet...",
+				}
+			end
+
+			-- Set lines in preview buffer
+			ctx.preview:set_lines(lines)
+
+			-- Set filetype for syntax highlighting
+			if ctx.preview.buf and vim.api.nvim_buf_is_valid(ctx.preview.buf) then
+				vim.api.nvim_buf_set_option(ctx.preview.buf, "filetype", "markdown")
+			end
 		end,
 		confirm = function(picker, item)
 			if item and item.session_id then
@@ -127,42 +169,100 @@ function M.show_history(opts)
 			end
 		end,
 		actions = {
-			delete = function(picker, item)
-				if item and item.session_id then
-					require("autobahn").delete_session(item.session_id)
-					picker:close()
-					vim.defer_fn(function()
-						M.show_history(opts)
-					end, 50)
-				end
-			end,
 			send_message = function(picker, item)
-				if item and item.session_id and item.session and item.session.interactive then
-					picker:close()
-					require("autobahn").send_message_interactive(item.session_id)
-				elseif item then
-					vim.notify("Session is not in interactive mode", vim.log.levels.WARN)
+				if not item then
+					vim.notify("No session selected", vim.log.levels.WARN)
+					return
 				end
+
+				if not item.session_id then
+					vim.notify("Invalid session", vim.log.levels.ERROR)
+					return
+				end
+
+				local s = item.session
+				if not s.interactive then
+					vim.notify("Session is not in interactive mode", vim.log.levels.WARN)
+					return
+				end
+
+				snacks.input({
+					prompt = string.format("Message to %s:", s.task or s.id:sub(9)),
+					completion = "file",
+					highlight = function(text)
+						-- Highlight @file references in blue
+						local highlights = {}
+						for match_start, match_end in text:gmatch("()@[%w/.-_]+()") do
+							table.insert(highlights, {
+								match_start - 1, -- 0-indexed start
+								match_end - 1, -- 0-indexed end
+								"Special", -- highlight group
+							})
+						end
+						return highlights
+					end,
+				}, function(message)
+					if message and message ~= "" then
+						require("autobahn").send_message(item.session_id, message)
+						vim.notify(
+							string.format("Message sent to session %s", item.session_id:sub(9)),
+							vim.log.levels.INFO
+						)
+					end
+				end)
 			end,
-			new_session = function(picker)
+			new_session = function(picker, item)
 				picker:close()
 				vim.schedule(function()
 					require("autobahn.ui").show_new_session_form()
+				end)
+			end,
+			delete_session = function(picker, item)
+				if not item or not item.session_id then
+					vim.notify("No session to delete", vim.log.levels.WARN)
+					return
+				end
+
+				-- Confirm deletion
+				vim.ui.select({ "Yes", "No" }, {
+					prompt = string.format("Delete session '%s'?", item.session.task or item.session_id),
+				}, function(choice)
+					if choice == "Yes" then
+						require("autobahn").delete_session(item.session_id)
+						picker:close()
+						vim.defer_fn(function()
+							M.show_history(opts)
+						end, 100)
+					end
 				end)
 			end,
 		},
 		win = {
 			input = {
 				keys = {
+					["n"] = { "new_session", mode = { "n" } },
+					["m"] = { "send_message", mode = { "n" } },
+					["d"] = { "delete_session", mode = { "n" } },
 					["<C-r>"] = { "reload", mode = { "i", "n" } },
 				},
 			},
+			list = {
+				footer = function()
+					return {
+						{ " <CR> ", "Special" },
+						{ "View ", "Comment" },
+						{ " d ", "Special" },
+						{ "Delete ", "Comment" },
+						{ " m ", "Special" },
+						{ "Message ", "Comment" },
+						{ " n ", "Special" },
+						{ "New ", "Comment" },
+						{ " q ", "Special" },
+						{ "Close ", "Comment" },
+					}
+				end,
+			},
 		},
-		-- keys = {
-		-- 	d = "delete",
-		-- 	m = "send_message",
-		-- 	n = "new_session",
-		-- },
 	})
 end
 

@@ -127,13 +127,28 @@ Multi-agent coding session manager for Neovim. Run multiple coding agents in iso
 
 The Snacks UI (`:Autobahn`/`:AutobahnDashboard`) supports:
 
+**Navigation:**
 - Type to filter sessions by task, branch, or ID (fuzzy matching)
-- `j`/`k` or `<Up>`/`<Down>` - Navigate sessions (updates preview in real-time)
+- `j`/`k` or `<Up>`/`<Down>` - Navigate sessions (live preview updates in real-time)
 - `<Enter>` - View session output in full window
-- `d` - Delete session and refresh
-- `m` - Send message to session (interactive sessions only)
-- `n` - New session
-- `<Esc>` or `q` - Close
+
+**Session Management:**
+- `d` - Delete session (with confirmation prompt)
+- `m` - Enter inline message mode for interactive session
+  - Input field title changes to show target session
+  - Type your message directly in the dashboard
+  - Press `<Enter>` to send message and return to filter mode
+  - Press `<Esc>` to cancel and return to filter mode
+  - Dashboard stays open - see response in real-time preview
+- `n` - Create new session
+- `<C-r>` - Reload sessions list
+- `<Esc>` or `q` - Close dashboard
+
+**Preview Features:**
+- Live buffer display for running sessions with real-time updates
+- Shows actual session buffer content as it's being written
+- Automatic syntax highlighting
+- Session metadata fallback for sessions without output
 
 Available commands are displayed in a footer at the bottom of the dashboard.
 

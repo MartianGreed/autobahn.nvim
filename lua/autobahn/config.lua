@@ -47,6 +47,22 @@ M.defaults = {
       output_format = "stream-json",
       interactive = false,
     },
+    ["opencode"] = {
+      cmd = "opencode",
+      auto_accept = false,
+      auto_accept_flag = "--dangerously-skip-permissions",
+      max_cost_usd = 1.0,
+      output_format = "stream-json",
+      interactive = false,
+    },
+    ["codex"] = {
+      cmd = "codex",
+      auto_accept = false,
+      auto_accept_flag = "--dangerously-skip-permissions",
+      max_cost_usd = 1.0,
+      output_format = "stream-json",
+      interactive = false,
+    },
   },
 }
 
