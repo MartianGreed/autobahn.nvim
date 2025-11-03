@@ -11,6 +11,8 @@ function M.spawn(session_id, task)
     return nil
   end
 
+  parser.reset_state()
+
   local config = require("autobahn.config")
   local agent_config = config.get_agent_config(session.agent_type)
 
@@ -59,6 +61,7 @@ function M.spawn(session_id, task)
     buffer_id = vim.api.nvim_create_buf(false, true)
     vim.api.nvim_buf_set_option(buffer_id, "modifiable", false)
     vim.api.nvim_buf_set_option(buffer_id, "buftype", "nofile")
+    vim.api.nvim_buf_set_option(buffer_id, "filetype", "markdown")
     vim.api.nvim_buf_set_name(buffer_id, string.format("autobahn://%s", session_id))
   end
 

@@ -132,6 +132,7 @@ function M.show_history(opts)
 			-- If session has a live buffer, display it directly
 			if s.buffer_id and vim.api.nvim_buf_is_valid(s.buffer_id) then
 				-- Use the actual session buffer for real-time updates
+				vim.api.nvim_buf_set_option(s.buffer_id, "filetype", "markdown")
 				ctx.preview:set_buf(s.buffer_id)
 				return
 			end
@@ -165,7 +166,9 @@ function M.show_history(opts)
 		confirm = function(picker, item)
 			if item and item.session_id then
 				picker:close()
-				require("autobahn").view_session(item.session_id)
+				vim.schedule(function()
+					require("autobahn").view_session(item.session_id)
+				end)
 			end
 		end,
 		actions = {
