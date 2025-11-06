@@ -9,6 +9,7 @@ M.EventType = {
   SESSION_ERROR = "session_error",
   SESSION_DELETED = "session_deleted",
   STATUS_CHANGED = "status_changed",
+  AGENT_QUESTION = "agent_question",
 }
 
 function M.on(event_type, callback)

@@ -58,3 +58,7 @@ vim.api.nvim_create_user_command("AutobahnSend", function(opts)
   end
   require("autobahn").send_message_interactive(session_id)
 end, { nargs = "?" })
+
+vim.api.nvim_create_user_command("AutobahnSetupHooks", function()
+  require("autobahn.hooks").setup_project()
+end, {})

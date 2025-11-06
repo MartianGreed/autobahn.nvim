@@ -4,11 +4,35 @@ local session_module = require("autobahn.session")
 local events = require("autobahn.events")
 local parser = require("autobahn.agent.parser")
 
+local function expand_file_paths(message, workspace_path)
+  if not message or not workspace_path then
+    return message
+  end
+
+  local expanded = message:gsub("@([%w/._-]+)", function(filepath)
+    local full_path = workspace_path .. "/" .. filepath
+    if vim.fn.filereadable(full_path) == 1 or vim.fn.isdirectory(full_path) == 1 then
+      return "@" .. full_path
+    end
+    return "@" .. filepath
+  end)
+
+  return expanded
+end
+
 function M.spawn(session_id, task)
   local session = session_module.get(session_id)
   if not session then
     vim.notify("Session not found", vim.log.levels.ERROR)
     return nil
+  end
+
+  local original_task = task
+  task = expand_file_paths(task, session.workspace_path)
+
+  local cli_task = task
+  if session.plan_mode then
+    cli_task = "PLAN MODE: You are in research/planning mode. Do NOT execute any changes, run any commands, or modify any files. Instead, focus on: 1) Understanding the codebase and requirements 2) Researching the implementation approach 3) Planning the steps needed. Respond with your research findings and proposed plan.\n\nTask: " .. task
   end
 
   parser.reset_state()
@@ -25,7 +49,7 @@ function M.spawn(session_id, task)
   end
 
   local interactive_mode = session.interactive or agent_config.interactive
-  local args = { "-p", task }
+  local args = { "-p", cli_task }
 
   if interactive_mode and session.claude_session_id then
     table.insert(args, "--resume")
@@ -72,6 +96,10 @@ function M.spawn(session_id, task)
   if not session.buffer_id or not vim.api.nvim_buf_is_valid(session.buffer_id) then
     local startup_lines = parser.format_session_header(session)
     table.insert(startup_lines, "")
+    if session.plan_mode then
+      table.insert(startup_lines, " **Mode:** Plan (research only)")
+      table.insert(startup_lines, "")
+    end
     table.insert(startup_lines, string.format("**Initial Task:** %s", task))
     table.insert(startup_lines, "")
 
@@ -81,7 +109,11 @@ function M.spawn(session_id, task)
 
     vim.list_extend(output_lines, startup_lines)
   else
-    local user_message_lines = parser.format_user_message(task, message_start_time)
+    local display_task = task
+    if session.plan_mode then
+      display_task = " [Plan Mode] " .. task
+    end
+    local user_message_lines = parser.format_user_message(display_task, message_start_time)
     vim.api.nvim_buf_set_option(buffer_id, "modifiable", true)
     vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_message_lines)
     vim.api.nvim_buf_set_option(buffer_id, "modifiable", false)
@@ -158,13 +190,20 @@ function M.spawn(session_id, task)
               end
 
               local cost_delta = 0
-              if parsed.total_cost_usd then
+              if parsed.type == "result" and parsed.total_cost_usd then
                 cost_delta = parsed.total_cost_usd - last_cost
                 last_cost = parsed.total_cost_usd
-                session_module.update(session_id, {
+                local update = {
                   cost_usd = parsed.total_cost_usd,
                   last_cost = last_cost,
-                })
+                }
+                if parsed.duration_ms then
+                  update.duration_ms = parsed.duration_ms
+                end
+                if parsed.num_turns then
+                  update.num_turns = parsed.num_turns
+                end
+                session_module.update(session_id, update)
               end
 
               local response_time = os.time()
@@ -172,6 +211,17 @@ function M.spawn(session_id, task)
               if formatted then
                 vim.list_extend(output_lines, formatted)
                 append_to_buffer(formatted)
+              end
+
+              local question_data = parser.extract_question_data(parsed)
+              if question_data then
+                local current_questions = session.pending_questions or {}
+                table.insert(current_questions, question_data)
+                session_module.update(session_id, { pending_questions = current_questions })
+                vim.notify("Agent asked a question. Press <CR> in the buffer to answer.", vim.log.levels.INFO)
+              elseif parser.contains_question(parsed) then
+                session_module.update(session_id, { has_informal_question = true })
+                events.emit(events.EventType.AGENT_QUESTION, session)
               end
             end
           end
@@ -275,7 +325,9 @@ function M.send_message(session_id, message)
     return false
   end
 
-  return M.spawn(session_id, message)
+  local expanded_message = expand_file_paths(message, session.workspace_path)
+  session_module.update(session_id, { has_informal_question = false })
+  return M.spawn(session_id, expanded_message)
 end
 
 function M.stop(session_id)

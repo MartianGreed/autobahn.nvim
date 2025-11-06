@@ -50,6 +50,14 @@ autobahn.nvim is a Neovim plugin that manages multi-agent coding sessions. It sp
 - Extracts: session_id (for resume), total_cost_usd, message content, tool_use events
 - Formats output for buffer display
 
+**Hook-Based Prompting** (`lua/autobahn/rpc.lua`, `lua/autobahn/hooks.lua`):
+- PreToolUse hook intercepts `AskUserQuestion` before Claude executes it
+- `scripts/prompt-nvim.sh` finds nvim socket matching project, calls RPC
+- `rpc.lua` shows snacks.picker with question options, writes answer to temp file
+- Hook returns answer JSON to Claude synchronously (no spawn/resume needed)
+- Setup per-project via `:AutobahnSetupHooks` command
+- Copies hook script to `.claude/scripts/`, configures `.claude/settings.local.json`
+
 ## Session Modes
 
 **One-shot** (default): Agent executes task with `-p` flag and exits. For single tasks.

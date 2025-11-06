@@ -25,6 +25,7 @@ M.SessionStatus = {
 --- @field branch string|nil Branch name
 --- @field auto_accept boolean|nil Auto-accept mode
 --- @field interactive boolean|nil Interactive mode
+--- @field plan_mode boolean|nil Plan mode (default: false)
 --- @return table session Session object
 function M.create(opts)
   local session_id = "session_" .. state.next_id
@@ -41,11 +42,13 @@ function M.create(opts)
     branch = opts.branch,
     auto_accept = opts.auto_accept,
     interactive = opts.interactive or false,
+    plan_mode = opts.plan_mode or false,
     created_at = os.time(),
     updated_at = os.time(),
     cost_usd = 0,
     output = {},
     messages = {},
+    pending_questions = {},
     last_cost = 0,
   }
 

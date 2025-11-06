@@ -146,26 +146,69 @@ local function prompt_interactive(callback)
   end
 end
 
+local function prompt_plan_mode(callback)
+  if has_snacks() then
+    local snacks = require("snacks")
+    snacks.picker.pick({
+      items = {
+        { idx = 1, text = " Build  - Execute changes", score = 0, value = false },
+        { idx = 2, text = " Plan   - Research only", score = 0, value = true },
+      },
+      prompt = " Agent Mode ",
+      format = "text",
+      layout = {
+        preview = false,
+      },
+      confirm = function(picker, item)
+        if item then
+          picker:close()
+          callback(item.value)
+        end
+      end,
+    })
+
+    vim.schedule(function()
+      vim.cmd("startinsert")
+    end)
+  else
+    vim.ui.select({ "Build", "Plan" }, {
+      prompt = "Agent mode?",
+    }, function(choice)
+      if choice then
+        callback(choice == "Plan")
+      end
+    end)
+  end
+end
+
 function M.show()
   prompt_task(function(task)
     select_branch(function(branch)
       prompt_auto_accept(function(auto_accept)
         prompt_interactive(function(interactive)
-          local autobahn = require("autobahn")
-          local new_session = autobahn.create_session({
-            task = task,
-            branch = branch,
-            auto_accept = auto_accept,
-            interactive = interactive,
-            start_immediately = true,
-          })
+          prompt_plan_mode(function(plan_mode)
+            local autobahn = require("autobahn")
+            local new_session = autobahn.create_session({
+              task = task,
+              branch = branch,
+              auto_accept = auto_accept,
+              interactive = interactive,
+              plan_mode = plan_mode,
+              start_immediately = true,
+            })
 
-          if new_session then
-            vim.notify(
-              string.format("Session %s created (%s)", new_session.id, interactive and "interactive" or "one-shot"),
-              vim.log.levels.INFO
-            )
-          end
+            if new_session then
+              vim.notify(
+                string.format(
+                  "Session %s created (%s, %s)",
+                  new_session.id,
+                  interactive and "interactive" or "one-shot",
+                  plan_mode and "plan" or "build"
+                ),
+                vim.log.levels.INFO
+              )
+            end
+          end)
         end)
       end)
     end)

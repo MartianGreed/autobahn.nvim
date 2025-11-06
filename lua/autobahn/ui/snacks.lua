@@ -206,7 +206,7 @@ function M.show_history(opts)
 				end
 
 				snacks.input({
-					prompt = string.format("Message to %s:", s.task or s.id:sub(9)),
+					prompt = string.format("Message to %s %s:", s.task or s.id:sub(9), s.plan_mode and "[Plan]" or "[Build]"),
 					completion = "file",
 					highlight = function(text)
 						-- Highlight @file references in blue
@@ -218,11 +218,44 @@ function M.show_history(opts)
 								"Special", -- highlight group
 							})
 						end
+						-- Highlight /plan and /build prefixes in yellow
+						if text:match("^/plan%s") or text:match("^/build%s") then
+							local space_pos = text:find("%s")
+							if space_pos then
+								table.insert(highlights, {
+									0,
+									space_pos - 1,
+									"WarningMsg",
+								})
+							end
+						end
 						return highlights
 					end,
 				}, function(message)
 					if message and message ~= "" then
-						require("autobahn").send_message(item.session_id, message)
+						local override_mode = nil
+						local cleaned_message = message
+
+						if message:match("^/plan%s") then
+							override_mode = true
+							cleaned_message = message:gsub("^/plan%s+", "")
+						elseif message:match("^/build%s") then
+							override_mode = false
+							cleaned_message = message:gsub("^/build%s+", "")
+						end
+
+						if override_mode ~= nil and override_mode ~= s.plan_mode then
+							require("autobahn.session").update(item.session_id, { plan_mode = override_mode })
+							vim.notify(
+								string.format(
+									"Switched to %s mode for this message",
+									override_mode and "plan" or "build"
+								),
+								vim.log.levels.INFO
+							)
+						end
+
+						require("autobahn").send_message(item.session_id, cleaned_message)
 						vim.notify(
 							string.format("Message sent to session %s", item.session_id:sub(9)),
 							vim.log.levels.INFO

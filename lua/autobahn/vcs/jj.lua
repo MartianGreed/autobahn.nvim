@@ -61,6 +61,17 @@ function M.create_workspace(opts)
     return nil
   end
 
+  local parent_claude_md = root .. "/CLAUDE.md"
+  local parent_claude_dir = root .. "/.claude"
+
+  if vim.fn.filereadable(parent_claude_md) == 1 then
+    vim.fn.system({ "ln", "-sf", parent_claude_md, workspace_path .. "/CLAUDE.md" })
+  end
+
+  if vim.fn.isdirectory(parent_claude_dir) == 1 then
+    vim.fn.system({ "ln", "-sf", parent_claude_dir, workspace_path .. "/.claude" })
+  end
+
   return workspace_path
 end
 

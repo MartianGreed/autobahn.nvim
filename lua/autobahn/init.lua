@@ -53,6 +53,7 @@ function M.create_session(opts)
     branch = opts.branch,
     auto_accept = opts.auto_accept,
     interactive = opts.interactive,
+    plan_mode = opts.plan_mode,
   })
 
   events.emit(events.EventType.SESSION_CREATED, new_session)

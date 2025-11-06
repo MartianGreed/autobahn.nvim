@@ -198,7 +198,11 @@ function M.format_user_message(message, timestamp)
 	else
 		table.insert(lines, "**User**")
 	end
-	table.insert(lines, message)
+
+	for line in message:gmatch("[^\r\n]+") do
+		table.insert(lines, line)
+	end
+
 	table.insert(lines, "")
 	table.insert(lines, "")
 	return lines
@@ -206,6 +210,88 @@ end
 
 function M.format_thinking_placeholder()
 	return { "thinking..." }
+end
+
+function M.format_question(question_data)
+	if not question_data or not question_data.questions then
+		return nil
+	end
+
+	local lines = {}
+	table.insert(lines, "")
+	table.insert(lines, "---")
+	table.insert(lines, "")
+	table.insert(lines, "❓ **Agent Question**")
+	table.insert(lines, "")
+
+	for idx, question in ipairs(question_data.questions) do
+		table.insert(lines, string.format("**Q%d**: %s", idx, question.question))
+		table.insert(lines, "")
+		if question.options then
+			table.insert(lines, "**Options:**")
+			for i, option in ipairs(question.options) do
+				table.insert(lines, string.format("%d. **%s** - %s", i, option.label, option.description or ""))
+			end
+		end
+		table.insert(lines, "")
+		table.insert(lines, "> Press `<CR>` on this line to answer")
+		table.insert(lines, "")
+	end
+
+	table.insert(lines, "---")
+	table.insert(lines, "")
+
+	return lines
+end
+
+function M.extract_question_data(data)
+	if not data or data.type ~= "assistant" then
+		return nil
+	end
+
+	if data.message and data.message.content then
+		for _, content in ipairs(data.message.content) do
+			if content.type == "tool_use" and content.name == "AskUserQuestion" and content.input then
+				return {
+					tool_id = content.id,
+					questions = content.input.questions,
+				}
+			end
+		end
+	end
+
+	return nil
+end
+
+function M.contains_question(data)
+	if not data or data.type ~= "assistant" then
+		return false
+	end
+
+	if data.message and data.message.content then
+		local last_text = nil
+		for _, content in ipairs(data.message.content) do
+			if content.type == "text" and content.text then
+				last_text = content.text
+			end
+		end
+
+		if last_text then
+			local lines = {}
+			for line in last_text:gmatch("[^\r\n]+") do
+				table.insert(lines, line)
+			end
+
+			if #lines > 0 then
+				local last_line = lines[#lines]:match("^%s*(.-)%s*$")
+				if last_line:match("%?%s*$") then
+					return true
+				end
+			end
+		end
+	end
+
+	return false
 end
 
 function M.format_output(data, session_id, timestamp, cost_delta)
@@ -246,19 +332,26 @@ function M.format_output(data, session_id, timestamp, cost_delta)
 				if content.type == "text" and content.text then
 					vim.list_extend(lines, format_as_blockquote(content.text))
 				elseif content.type == "tool_use" then
-					local tool_details = {}
-					if content.input then
-						local ok, json_str = pcall(vim.json.encode, content.input)
-						if ok then
-							table.insert(tool_details, "```json")
-							table.insert(tool_details, json_str)
-							table.insert(tool_details, "```")
+					if content.name == "AskUserQuestion" and content.input then
+						local question_lines = M.format_question(content.input)
+						if question_lines then
+							vim.list_extend(lines, question_lines)
 						end
+					else
+						local tool_details = {}
+						if content.input then
+							local ok, json_str = pcall(vim.json.encode, content.input)
+							if ok then
+								table.insert(tool_details, "```json")
+								table.insert(tool_details, json_str)
+								table.insert(tool_details, "```")
+							end
+						end
+						vim.list_extend(
+							lines,
+							create_collapsible_details("Tool: " .. (content.name or "unknown"), tool_details)
+						)
 					end
-					vim.list_extend(
-						lines,
-						create_collapsible_details("Tool: " .. (content.name or "unknown"), tool_details)
-					)
 				end
 			end
 		end
@@ -326,43 +419,45 @@ function M.format_output(data, session_id, timestamp, cost_delta)
 			end
 			content_blocks[data.index] = nil
 		end
-	elseif data.type == "text" then
-		vim.list_extend(lines, format_as_blockquote(data.result or ""))
-	elseif data.type == "tool_use" then
-		local tool_name = data.subtype or "unknown"
-		local tool_details = {}
-		if data.result then
-			table.insert(tool_details, data.result)
-		end
-		vim.list_extend(lines, create_collapsible_details("Tool: " .. tool_name, tool_details))
-	elseif data.type == "tool_result" then
-		local tool_name = data.tool_name or "unknown"
-		local result_details = {}
-		table.insert(result_details, "**Result:**")
-		table.insert(result_details, "")
-		if type(data.content) == "table" then
-			for _, content_item in ipairs(data.content) do
-				if content_item.type == "text" and content_item.text then
-					table.insert(result_details, content_item.text)
+	elseif data.type == "user" then
+		if data.message and data.message.content then
+			for _, content in ipairs(data.message.content) do
+				if content.type == "tool_result" then
+					local result_details = {}
+					if type(content.content) == "table" then
+						for _, content_item in ipairs(content.content) do
+							if content_item.type == "text" and content_item.text then
+								table.insert(result_details, content_item.text)
+							end
+						end
+					elseif content.content then
+						table.insert(result_details, tostring(content.content))
+					end
+					if #result_details > 0 then
+						vim.list_extend(
+							lines,
+							{
+								"<details>",
+								"<summary>Tool Result</summary>",
+								"",
+								table.concat(result_details, "\n"),
+								"",
+								"</details>",
+								"",
+							}
+						)
+					end
 				end
 			end
-		elseif data.content then
-			table.insert(result_details, tostring(data.content))
 		end
-		vim.list_extend(
-			lines,
-			{
-				"<details open>",
-				"<summary>📤 Tool Result: " .. tool_name .. "</summary>",
-				"",
-				table.concat(result_details, "\n"),
-				"",
-				"</details>",
-				"",
-			}
-		)
 	elseif data.type == "result" then
-		return nil
+		if data.subtype == "success" then
+			return nil
+		elseif data.subtype == "error_max_turns" then
+			table.insert(lines, "> **Session ended**: Maximum turns reached")
+		elseif data.subtype == "error_during_execution" then
+			table.insert(lines, string.format("> **Error**: %s", data.result or "Execution error"))
+		end
 	elseif data.type == "error" then
 		table.insert(lines, string.format("> ⚠️  **Error**: %s", data.result or "Unknown error"))
 	end
