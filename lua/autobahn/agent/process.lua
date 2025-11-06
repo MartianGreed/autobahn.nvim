@@ -66,14 +66,14 @@ function M.spawn(session_id, task)
   end
 
   local output_lines = session.output or {}
+  local message_start_time = os.time()
+  local last_cost = session.last_cost or 0
 
   if not session.buffer_id or not vim.api.nvim_buf_is_valid(session.buffer_id) then
-    local startup_lines = {
-      "=== Autobahn Agent Session ===",
-      string.format("Task: %s", task),
-      string.format("Workspace: %s", session.workspace_path),
-      "",
-    }
+    local startup_lines = parser.format_session_header(session)
+    table.insert(startup_lines, "")
+    table.insert(startup_lines, string.format("**Initial Task:** %s", task))
+    table.insert(startup_lines, "")
 
     vim.api.nvim_buf_set_option(buffer_id, "modifiable", true)
     vim.api.nvim_buf_set_lines(buffer_id, 0, -1, false, startup_lines)
@@ -81,17 +81,16 @@ function M.spawn(session_id, task)
 
     vim.list_extend(output_lines, startup_lines)
   else
-    local separator = {
-      "",
-      string.format("=== New Message: %s ===", task),
-      "",
-    }
+    local user_message_lines = parser.format_user_message(task, message_start_time)
     vim.api.nvim_buf_set_option(buffer_id, "modifiable", true)
-    vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, separator)
+    vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, user_message_lines)
     vim.api.nvim_buf_set_option(buffer_id, "modifiable", false)
 
-    vim.list_extend(output_lines, separator)
+    vim.list_extend(output_lines, user_message_lines)
   end
+
+  local thinking_line_idx = nil
+  local first_content_received = false
 
   local function append_to_buffer(lines)
     if #lines == 0 then
@@ -107,10 +106,25 @@ function M.spawn(session_id, task)
 
     vim.schedule(function()
       vim.api.nvim_buf_set_option(buffer_id, "modifiable", true)
+
+      if not first_content_received and thinking_line_idx then
+        vim.api.nvim_buf_set_lines(buffer_id, thinking_line_idx, thinking_line_idx + 1, false, {})
+        thinking_line_idx = nil
+        first_content_received = true
+      end
+
       vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, split_lines)
       vim.api.nvim_buf_set_option(buffer_id, "modifiable", false)
     end)
   end
+
+  local thinking_placeholder = parser.format_thinking_placeholder()
+  vim.api.nvim_buf_set_option(buffer_id, "modifiable", true)
+  local current_line_count = vim.api.nvim_buf_line_count(buffer_id)
+  vim.api.nvim_buf_set_lines(buffer_id, -1, -1, false, thinking_placeholder)
+  thinking_line_idx = current_line_count
+  vim.api.nvim_buf_set_option(buffer_id, "modifiable", false)
+  vim.list_extend(output_lines, thinking_placeholder)
 
   local full_cmd = vim.list_extend({ agent_config.cmd }, args)
 
@@ -126,22 +140,38 @@ function M.spawn(session_id, task)
           if line ~= "" then
             local parsed = parser.parse_stream_json(line)
             if parsed then
+              if config.get().debug then
+                local debug_file = session.workspace_path .. "/" .. config.get().debug_file_name
+                local log_entry = vim.json.encode({
+                  timestamp = os.date("%Y-%m-%dT%H:%M:%S"),
+                  session_id = session_id,
+                  type = parsed.type,
+                  data = parsed
+                })
+                vim.fn.writefile({log_entry}, debug_file, "a")
+              end
+
               if parsed.type == "system" and parsed.session_id then
                 session_module.update(session_id, {
                   claude_session_id = parsed.session_id,
                 })
               end
 
-              local formatted = parser.format_output(parsed)
+              local cost_delta = 0
+              if parsed.total_cost_usd then
+                cost_delta = parsed.total_cost_usd - last_cost
+                last_cost = parsed.total_cost_usd
+                session_module.update(session_id, {
+                  cost_usd = parsed.total_cost_usd,
+                  last_cost = last_cost,
+                })
+              end
+
+              local response_time = os.time()
+              local formatted = parser.format_output(parsed, session_id, response_time, cost_delta)
               if formatted then
                 vim.list_extend(output_lines, formatted)
                 append_to_buffer(formatted)
-              end
-
-              if parsed.total_cost_usd then
-                session_module.update(session_id, {
-                  cost_usd = parsed.total_cost_usd,
-                })
               end
             end
           end
@@ -181,13 +211,6 @@ function M.spawn(session_id, task)
           exit_code = exit_code,
           last_output = last_lines,
         })
-
-        local status_line = string.format(
-          "\n[%s] Exit code: %d",
-          exit_code == 0 and "Completed" or "Error",
-          exit_code
-        )
-        append_to_buffer({ status_line })
 
         if exit_code ~= 0 then
           vim.notify(

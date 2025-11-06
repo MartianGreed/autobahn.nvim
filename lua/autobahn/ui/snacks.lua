@@ -129,11 +129,27 @@ function M.show_history(opts)
 
 			local s = item.session
 
-			-- If session has a live buffer, display it directly
+			local metadata_lines = {
+				string.format(
+					"Status: %s | Cost: $%.3f | Duration: %s",
+					s.status,
+					s.cost_usd or 0,
+					format_duration(s.created_at)
+				),
+				string.rep("─", 80),
+				"",
+			}
+
+			-- If session has a live buffer, display it with metadata header
 			if s.buffer_id and vim.api.nvim_buf_is_valid(s.buffer_id) then
-				-- Use the actual session buffer for real-time updates
-				vim.api.nvim_buf_set_option(s.buffer_id, "filetype", "markdown")
-				ctx.preview:set_buf(s.buffer_id)
+				local buffer_lines = vim.api.nvim_buf_get_lines(s.buffer_id, 0, -1, false)
+				local all_lines = vim.list_extend(metadata_lines, buffer_lines)
+				ctx.preview:set_lines(all_lines)
+				vim.schedule(function()
+					if ctx.preview.buf and vim.api.nvim_buf_is_valid(ctx.preview.buf) then
+						vim.api.nvim_buf_set_option(ctx.preview.buf, "filetype", "markdown")
+					end
+				end)
 				return
 			end
 
@@ -145,23 +161,23 @@ function M.show_history(opts)
 				lines = {
 					"",
 					string.format("Session: %s", s.id),
-					string.format("Status: %s", s.status),
 					string.format("Task: %s", s.task or "N/A"),
 					string.format("Branch: %s", s.branch or "N/A"),
-					string.format("Cost: $%.3f", s.cost_usd or 0),
-					string.format("Created: %s", format_duration(s.created_at)),
 					"",
 					"No output yet...",
 				}
 			end
 
-			-- Set lines in preview buffer
-			ctx.preview:set_lines(lines)
+			-- Prepend metadata and set lines in preview buffer
+			local all_lines = vim.list_extend(metadata_lines, lines)
+			ctx.preview:set_lines(all_lines)
 
 			-- Set filetype for syntax highlighting
-			if ctx.preview.buf and vim.api.nvim_buf_is_valid(ctx.preview.buf) then
-				vim.api.nvim_buf_set_option(ctx.preview.buf, "filetype", "markdown")
-			end
+			vim.schedule(function()
+				if ctx.preview.buf and vim.api.nvim_buf_is_valid(ctx.preview.buf) then
+					vim.api.nvim_buf_set_option(ctx.preview.buf, "filetype", "markdown")
+				end
+			end)
 		end,
 		confirm = function(picker, item)
 			if item and item.session_id then

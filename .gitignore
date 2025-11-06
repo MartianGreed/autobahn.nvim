@@ -3,4 +3,5 @@
 *.swo
 *~
 .autobahn/
+.autobahn-debug.json
 test_workspace/

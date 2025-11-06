@@ -1,0 +1,11 @@
+return {
+  _all = {
+    pattern = "_spec%.lua$",
+    ROOT = {"tests/"},
+    lua = "luajit",
+  },
+  default = {
+    verbose = true,
+    output = "utfTerminal",
+  },
+}

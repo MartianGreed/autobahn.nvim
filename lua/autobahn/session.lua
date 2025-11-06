@@ -45,6 +45,8 @@ function M.create(opts)
     updated_at = os.time(),
     cost_usd = 0,
     output = {},
+    messages = {},
+    last_cost = 0,
   }
 
   state.sessions[session_id] = session
